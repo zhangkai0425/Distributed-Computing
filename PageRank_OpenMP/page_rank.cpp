@@ -55,7 +55,6 @@ void pageRank(Graph g, double *solution, double damping, double convergence) {
     double broadcastScore = 0.0;
     double globalDiff = 0.0;
     int iter = 0;
-    #pragma omp parallel for
     for (int i = 0; i < numNodes; ++i) {
         solution[i] = equal_prob;
     }
@@ -63,23 +62,28 @@ void pageRank(Graph g, double *solution, double damping, double convergence) {
         iter++;
         broadcastScore = 0.0;
         globalDiff = 0.0;
+        // point 1 : OMP
         #pragma omp parallel for reduction(+ : broadcastScore)
         for (int i = 0; i < numNodes; ++i) {
-            // double local_score_new = 0.0; // local parameter for parallelization on different threads
             score_new[i] = 0.0;
-
+            double local_score_new = 0.0; // point 2 : local parameter for access memory optimization
+            double old_i = score_old[i];
             if (outgoing_size(g, i) == 0)
-                broadcastScore += score_old[i];
+                broadcastScore += old_i;
             const Vertex *in_begin = incoming_begin(g, i);
             const Vertex *in_end = incoming_end(g, i);
             for (const Vertex *v = in_begin; v < in_end; ++v) {
-                score_new[i] += score_old[*v] / outgoing_size(g, *v);
+                local_score_new += score_old[*v] / outgoing_size(g, *v);
             }
-            score_new[i] = damping * score_new[i] + (1.0 - damping) * equal_prob;
+            local_score_new = damping * local_score_new + (1.0 - damping) * equal_prob;
+            score_new[i] = local_score_new;
         }
+        // point 4 : Computational optimization
+        double damping_broadcastScore = damping * broadcastScore * equal_prob;
+        // point 3 : OMP
         #pragma omp parallel for reduction(+ : globalDiff)
         for (int i = 0; i < numNodes; ++i) {
-            score_new[i] += damping * broadcastScore * equal_prob;
+            score_new[i] += damping_broadcastScore;
             globalDiff += std::abs(score_new[i] - score_old[i]);
         }
         converged = (globalDiff < convergence);
