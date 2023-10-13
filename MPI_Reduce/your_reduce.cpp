@@ -5,6 +5,13 @@
 
 void YOUR_Reduce(const int *sendbuf, int *recvbuf, int count)
 {
+    /*
+    Modify the code here.
+    Your implementation should have the same result as this MPI_Reduce
+    call. However, you MUST NOT use MPI_Reduce (or like) for your hand-in
+    version. Instead, you should use MPI_Send and MPI_Recv (or like). See
+    the homework instructions for more information.
+    */
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Get the current process rank
     MPI_Comm_size(MPI_COMM_WORLD, &size); // Get the size of the communicator
@@ -24,8 +31,8 @@ void YOUR_Reduce(const int *sendbuf, int *recvbuf, int count)
     }
 
     int step = 1;
-    int *temp_sendbuf = (int *)sendbuf; // Create a temporary non-const pointer
-
+    for (int i = 0; i < count; i++)
+        recvbuf[i] = sendbuf[i];
     for (int depth = 0; depth < max_depth; depth++)
     {
         int partner = rank ^ step; // Calculate the partner process rank
@@ -34,32 +41,33 @@ void YOUR_Reduce(const int *sendbuf, int *recvbuf, int count)
             int received[count];
             MPI_Request recv_request;
             MPI_Irecv(received, count, MPI_INT, partner, 0, MPI_COMM_WORLD, &recv_request);
-            // MPI_Recv(received, count, MPI_INT, partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // Receive data from the partner
             // Wait for the receive to complete
             MPI_Wait(&recv_request, MPI_STATUS_IGNORE);
             for (int i = 0; i < count; i++)
             {
-                temp_sendbuf[i] += received[i]; // Apply the reduction operation (in this case, MPI_SUM)
+                recvbuf[i] += received[i]; // Apply the reduction operation (in this case, MPI_SUM)
             }
         }
         else if (rank % (2 * step) == step)
         {
             int dest = rank - step;
             MPI_Request send_request;
-            MPI_Isend(temp_sendbuf, count, MPI_INT, dest, 0, MPI_COMM_WORLD, &send_request);
-            // MPI_Isend(temp_sendbuf, count, MPI_INT, dest, 0, MPI_COMM_WORLD); // Send data to the partner process
+            MPI_Isend(recvbuf, count, MPI_INT, dest, 0, MPI_COMM_WORLD, &send_request);
             // Wait for the send to complete
             MPI_Wait(&send_request, MPI_STATUS_IGNORE);
         }
 
         step *= 2;
     }
-
-    if (rank == 0)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            recvbuf[i] = sendbuf[i]; // Copy data to the receive buffer
-        }
-    }
+    /*
+    You may assume:
+    - Data type is always `int` (MPI_INT).
+    - Operation is always MPI_SUM.
+    - Process to hold final results is always process 0.
+    - Number of processes is 2, 4, or 8.
+    - Number of elements (`count`) is 1, 16, 256, 4096, 65536, 1048576,
+      16777216, or 268435456.
+    For other cases, your code is allowed to produce wrong results or even
+    crash. It is totally fine.
+    */
 }
