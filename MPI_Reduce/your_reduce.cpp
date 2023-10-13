@@ -1,6 +1,7 @@
 #include "your_reduce.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 // You may add your functions and variables here
 
 void YOUR_Reduce(const int *sendbuf, int *recvbuf, int count)
@@ -13,15 +14,13 @@ void YOUR_Reduce(const int *sendbuf, int *recvbuf, int count)
     the homework instructions for more information.
     */
     int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Get the current process rank
-    MPI_Comm_size(MPI_COMM_WORLD, &size); // Get the size of the communicator
-
-    if (size < 2)
-    {
-        fprintf(stderr, "Insufficient number of processes for reduction.\n");
-        MPI_Abort(MPI_COMM_WORLD, 1); // Terminate program execution
+    // Get the current process rank
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // Get the size of the communicator
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    memcpy(recvbuf, sendbuf, count * sizeof(int));
+    if (size == 1)
         return;
-    }
     int max_depth = 0;
     int temp_size = size;
     while (temp_size > 1)
@@ -29,24 +28,22 @@ void YOUR_Reduce(const int *sendbuf, int *recvbuf, int count)
         max_depth++;
         temp_size = (temp_size + 1) / 2;
     }
-
     int step = 1;
-    for (int i = 0; i < count; i++)
-        recvbuf[i] = sendbuf[i];
     for (int depth = 0; depth < max_depth; depth++)
     {
-        int partner = rank ^ step; // Calculate the partner process rank
+        // Calculate the partner process rank
+        int partner = rank ^ step;
         if (rank % (2 * step) == 0 && partner < size)
         {
-            int received[count];
+            int *received = (int *)malloc(count * sizeof(int));
             MPI_Request recv_request;
             MPI_Irecv(received, count, MPI_INT, partner, 0, MPI_COMM_WORLD, &recv_request);
             // Wait for the receive to complete
             MPI_Wait(&recv_request, MPI_STATUS_IGNORE);
+            // Apply the reduction operation (in this case, MPI_SUM)
             for (int i = 0; i < count; i++)
-            {
-                recvbuf[i] += received[i]; // Apply the reduction operation (in this case, MPI_SUM)
-            }
+                recvbuf[i] += received[i];
+            free(received);
         }
         else if (rank % (2 * step) == step)
         {
