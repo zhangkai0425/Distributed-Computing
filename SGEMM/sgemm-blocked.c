@@ -1,7 +1,7 @@
 const char *sgemm_desc = "Simple blocked sgemm.";
-
+#include <immintrin.h>
 #if !defined(BLOCK_SIZE)
-#define BLOCK_SIZE 41
+#define BLOCK_SIZE 64
 #endif
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -14,19 +14,21 @@ static void do_block(int lda, int M, int N, int K, float *A, float *B, float *C)
     /* For each column j of B */
     for (int j = 0; j < N; ++j)
         for (int k = 0; k < K; ++k)
+        {
+            register float b = B[k + j * lda];
             /* For each row i of A */
             for (int i = 0; i < M; ++i)
             {
-                /* Compute C(i,j) */
-                C[i + j * lda] += A[i + k * lda] * B[k + j * lda];
+                C[i + j * lda] += A[i + k * lda] * b;
             }
+        }
 }
 
 /* This routine performs a sgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in column-major format.
  * On exit, A and B maintain their input values. */
-void square_sgemm(int lda, float *A, float *B, float *C)
+void square_sgemm(int lda, float *__restrict__ A, float *__restrict__ B, float *__restrict__ C)
 {
     /* For each block-row of A */
     for (int i = 0; i < lda; i += BLOCK_SIZE)
